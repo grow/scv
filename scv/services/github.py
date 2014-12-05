@@ -2,18 +2,24 @@
 
 """GitHub service."""
 
+import base64
 import hashlib
 import hmac
 import json
 import logging
 import os
 import webapp2
+from google.appengine.api import urlfetch
 from scv import rpc
 from scv import settings
 
 __all__ = ('GitHubService',)
 
+GITHUB_API_HOST = 'https://api.github.com'
 RpcMethod = rpc.RpcMethod
+
+class Error(Exception):
+  pass
 
 
 class GitHubService(object):
@@ -48,6 +54,60 @@ class GitHubService(object):
     """
     settings.set('github_repo', repo)
     return {'success': True}
+
+  @RpcMethod
+  def GetFile(self, path, ref='master'):
+    url_path = os.path.join('/repos', self.get_repo(), 'contents', path)
+    url = GITHUB_API_HOST + url_path
+    headers = {
+        'Authorization': 'token {}'.format(self.get_access_token()),
+    }
+    response = urlfetch.fetch(url, headers=headers, deadline=10)
+    if response.status_code != 200:
+      raise Error(response.content)
+    return json.loads(response.content)
+
+  @RpcMethod
+  def WriteFile(self, path, message, content, sha=None, encoding=None, branch='master'):
+    """Writes content to a file.
+
+    Args:
+      path: File path.
+      message: Commit message.
+      content: File content.
+      sha: If updating an existing file, the blob SHA of the file being
+          replaced.
+      encoding: Should be "base64". If the content isn't encoded, the content
+          will be base64 encoded before sending to GitHub.
+      branch: The branch name.
+    """
+    url_path = os.path.join('/repos', self.get_repo(), 'contents', path)
+    url = GITHUB_API_HOST + url_path
+    headers = {
+        'Authorization': 'token {}'.format(self.get_access_token()),
+        'Content-Type': 'application/json',
+    }
+    # The GitHub API requires the content to be base64 encoded.
+    if encoding != 'base64':
+      content = base64.b64encode(content)
+    data = {
+        'message': message,
+        'content': content,
+    }
+    if sha:
+      data['sha'] = sha
+    payload = json.dumps(data)
+    response = urlfetch.fetch(url, method=urlfetch.PUT, headers=headers,
+        payload=payload, deadline=10)
+    if response.status_code != 200 and response.status_code != 201:
+      raise Error(response.content)
+    return json.loads(response.content)
+
+  def get_access_token(self):
+    return settings.get('github_access_token')
+
+  def get_repo(self):
+    return settings.get('github_repo')
 
 
 class GitHubWebhookHandler(webapp2.RequestHandler):

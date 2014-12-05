@@ -34,7 +34,7 @@ class JsonRpcHandler(webapp2.RequestHandler):
         result = method(service, **params)
         self.write_json(result=result)
     except Exception as e:
-      self.response.status_code = 500
+      self.response.status_int = 500
       self.write_json(error=str(e))
 
   def write_json(self, **kwargs):
