@@ -1,0 +1,22 @@
+module: default
+version: 1
+runtime: python27
+api_version: 1
+threadsafe: true
+
+handlers:
+- url: /_ah/admin/interactive.*
+  script: google.appengine.ext.admin.application
+  login: admin
+  secure: always
+
+# The GitHub webhook should not be login-restricted.
+- url: /_/github/webhook
+  script: main.app
+  secure: always
+
+# Until we have access control, restrict access to app admins only.
+- url: /.*
+  script: main.app
+  login: admin
+  secure: always
