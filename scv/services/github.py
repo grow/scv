@@ -68,7 +68,8 @@ class GitHubService(object):
     return json.loads(response.content)
 
   @RpcMethod
-  def WriteFile(self, path, message, content, sha=None, encoding=None, branch='master'):
+  def WriteFile(self, path, message, content, sha=None, encoding=None,
+      branch='master', commiter=None):
     """Writes content to a file.
 
     Args:
@@ -80,6 +81,7 @@ class GitHubService(object):
       encoding: Should be "base64". If the content isn't encoded, the content
           will be base64 encoded before sending to GitHub.
       branch: The branch name.
+      commiter: A dict of "name" and "email".
     """
     url_path = os.path.join('/repos', self.get_repo(), 'contents', path)
     url = GITHUB_API_HOST + url_path
@@ -96,10 +98,35 @@ class GitHubService(object):
     }
     if sha:
       data['sha'] = sha
+    if commiter:
+      data['commiter'] = commiter
     payload = json.dumps(data)
     response = urlfetch.fetch(url, method=urlfetch.PUT, headers=headers,
         payload=payload, deadline=10)
     if response.status_code != 200 and response.status_code != 201:
+      raise Error(response.content)
+    return json.loads(response.content)
+
+  @RpcMethod
+  def DeleteFile(self, path, message, sha, branch='master', commiter=None):
+    # TODO(stevenle): this API doesn't actually work yet, because the urlfetch
+    # service doesn't allow request bodies in DELETE requests.
+    url_path = os.path.join('/repos', self.get_repo(), 'contents', path)
+    url = GITHUB_API_HOST + url_path
+    headers = {
+        'Authorization': 'token {}'.format(self.get_access_token()),
+        'Content-Type': 'application/json',
+    }
+    data = {
+        'message': message,
+        'sha': sha,
+    }
+    if commiter:
+      data['commiter'] = commiter
+    payload = json.dumps(data)
+    response = urlfetch.fetch(url, method=urlfetch.DELETE, headers=headers,
+        payload=payload, deadline=10)
+    if response.status_code != 200:
       raise Error(response.content)
     return json.loads(response.content)
 
